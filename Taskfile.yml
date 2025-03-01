@@ -1,0 +1,15 @@
+version: "3"
+
+dotenv: [".env", "{{.ENV}}/.env.", "{{.HOME}}/.env"]
+
+env:
+  PYTHONPATH: "{{.ROOT_DIR}}/src"
+
+tasks:
+  preanalysis:
+    cmds:
+      - python src/preanalysis/analyse_five_minutes.py
+
+  export:
+    cmds:
+      - python src/preanalysis/export_to_csv.py
