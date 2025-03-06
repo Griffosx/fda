@@ -13,3 +13,15 @@ tasks:
   export:
     cmds:
       - python src/preanalysis/export_to_csv.py
+
+  aggregate:
+    cmds:
+      - python src/preanalysis/aggregate_bars.py
+
+  generate-images:
+    cmds:
+      - python src/preanalysis/clustering/generate_images.py
+
+  cluster-images:
+    cmds:
+      - python src/preanalysis/clustering/cluster_images.py
