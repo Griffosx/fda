@@ -25,3 +25,7 @@ tasks:
   cluster-images:
     cmds:
       - python src/preanalysis/clustering/cluster_images.py
+
+  classify:
+    cmds:
+      - python src/preanalysis/clustering/classify.py

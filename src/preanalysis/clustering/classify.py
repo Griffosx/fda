@@ -1,0 +1,151 @@
+import os
+import shutil
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+import pandas as pd
+from generate_images import process_values
+
+
+def classify_dataframe(
+    df, model_path="classifier.pth", output_dir="assets/classified_data", device=None
+):
+    """
+    Classify data in a dataframe using a trained PyTorch model and create separate
+    dataframes for each class.
+
+    Args:
+        df: DataFrame containing the data to classify (same as in draw_normalized_data)
+        model_path: Path to the saved PyTorch model
+        output_dir: Directory to save class-specific dataframes
+        device: Device to run inference on (None for auto-detection)
+
+    Returns:
+        dict: Dictionary mapping class names to dataframes containing data for that class
+    """
+
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Set device
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    # Load the trained model
+    if isinstance(model_path, str):
+        # Import necessary libraries
+        from torchvision import models
+        import torch.nn as nn
+
+        # Define the model architecture first
+        def get_model(num_classes):
+            model = models.resnet34()
+            num_features = model.fc.in_features
+            model.fc = nn.Linear(num_features, num_classes)
+            return model
+
+        # Load state dict
+        state_dict = torch.load(model_path, map_location=device)
+
+        # Determine number of classes from the state dict
+        fc_weight_shape = state_dict["fc.weight"].shape
+        num_classes = fc_weight_shape[0]
+
+        # Create model with correct number of classes
+        model = get_model(num_classes)
+        model.load_state_dict(state_dict)
+    else:
+        model = model_path
+
+    model.to(device)
+    model.eval()
+
+    # Define the same transforms used during training
+    transform = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+        ]
+    )
+
+    # Get the class mapping from the model or pass it in
+    try:
+        class_mapping = model.class_to_idx
+        class_names = {v: k for k, v in class_mapping.items()}
+    except AttributeError:
+        # If class mapping isn't available, use numerical indices
+        # You can replace this with your actual class names if known
+        class_names = {i: f"class_{i}" for i in range(model.fc.out_features)}
+
+    # Dictionary to store dataframes for each class
+    class_dfs = {class_name: [] for class_name in class_names.values()}
+
+    # Create image directories for each class
+    for class_name in class_names.values():
+        class_img_dir = os.path.join(output_dir, class_name, "images")
+        os.makedirs(class_img_dir, exist_ok=True)
+
+    # Process each row in the dataframe
+    for index, row in df.iterrows():
+        # Get ticker and day for filename
+        ticker = row["ticker"]
+        day = row["day"]
+
+        # Construct the path to the image (assuming same structure as draw_normalized_data)
+        img_path = os.path.join("assets/bar_charts", f"{ticker}_{day}.png")
+
+        # Check if the image exists
+        if not os.path.exists(img_path):
+            print(f"Warning: Image not found for {ticker} on {day}. Skipping.")
+            continue
+
+        # Load and preprocess the image
+        try:
+            image = Image.open(img_path).convert("RGB")
+            image_tensor = transform(image).unsqueeze(0).to(device)
+
+            # Get model prediction
+            with torch.no_grad():
+                outputs = model(image_tensor)
+                _, predicted_idx = torch.max(outputs, 1)
+                predicted_class_idx = predicted_idx.item()
+                predicted_class_name = class_names[predicted_class_idx]
+
+            # Add the row to the appropriate class dataframe
+            class_dfs[predicted_class_name].append(row)
+
+            # Copy the image to the class-specific directory
+            dest_img_path = os.path.join(
+                output_dir, predicted_class_name, "images", f"{ticker}_{day}.png"
+            )
+            shutil.copy2(img_path, dest_img_path)
+
+            print(f"Classified {ticker} on {day} as {predicted_class_name}")
+
+        except Exception as e:
+            print(f"Error processing {ticker} on {day}: {str(e)}")
+
+    # Convert lists to dataframes
+    for class_name in class_dfs.keys():
+        if class_dfs[class_name]:
+            class_dfs[class_name] = pd.DataFrame(class_dfs[class_name])
+
+            # Save the dataframe to CSV
+            output_path = os.path.join(output_dir, f"{class_name}.csv")
+            class_dfs[class_name].to_csv(output_path, index=False)
+            print(f"Saved {len(class_dfs[class_name])} records to {output_path}")
+            print(
+                f"Copied {len(class_dfs[class_name])} images to {os.path.join(output_dir, class_name, 'images')}"
+            )
+        else:
+            class_dfs[class_name] = pd.DataFrame()
+            print(f"No data classified as {class_name}")
+
+    return class_dfs
+
+
+if __name__ == "__main__":
+    values = process_values("assets/top_100_15mins_2023_2024.csv", limit=1000)
+    print(values.head(20))
+    classify_dataframe(values.head(20))
