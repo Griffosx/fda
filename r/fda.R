@@ -69,9 +69,11 @@ matplot(time_grid, t(bear_center_fda), type = "l", lty = 1, col = 1:nrow(bear_ce
         xlab = "Time (HHMM)", ylab = "Stock Change", main = "Not smoothed Bear Center Stock Days Over Time")
 
 
+
 #######################################################################################################################
 # Smoothing and FPCA
 #######################################################################################################################
+
 
 
 # Function for B-spline smoothing with optimal parameter selection
@@ -282,4 +284,200 @@ plot_fpca_components(bear_center_fpca, time_grid, title = "Bear center FPCA")
 
 
 
+#######################################################################################################################
+# Descriptive Statistics
+#######################################################################################################################
+
+
+
+# Function to calculate and plot mean and standard deviation
+plot_mean_sd <- function(fd_obj, time_grid, title, legend_pos = "topleft") {
+  # Calculate mean and standard deviation
+  mean_fd <- mean.fd(fd_obj)
+  stddev_fd <- std.fd(fd_obj)
+  
+  # Evaluate at time points for plotting
+  mean_values <- eval.fd(time_grid, mean_fd)
+  stddev_values <- eval.fd(time_grid, stddev_fd)
+  
+  # Calculate bands
+  upper_1sd <- mean_values + stddev_values
+  lower_1sd <- mean_values - stddev_values
+  upper_2sd <- mean_values + 2*stddev_values
+  lower_2sd <- mean_values - 2*stddev_values
+  
+  # Create empty plot with appropriate dimensions
+  y_range <- range(c(lower_2sd, upper_2sd))
+  plot(time_grid, mean_values, type = "n", 
+       ylim = y_range,
+       xlab = "Time (Hour)",
+       ylab = "Value",
+       main = paste(title, "- Mean and Variability"))
+  
+  # Add individual curves with transparency (if needed, limit the number shown)
+  curve_data <- eval.fd(time_grid, fd_obj)
+  if(ncol(curve_data) > 100) {
+    # If too many curves, sample some
+    set.seed(123) # For reproducibility
+    sample_indices <- sample(1:ncol(curve_data), 100)
+    curve_data <- curve_data[, sample_indices]
+  }
+  
+  matlines(time_grid, curve_data, col = adjustcolor("gray", alpha.f = 0.2), 
+           lty = 1, type = "l")
+  
+  # Add bands
+  polygon(c(time_grid, rev(time_grid)), 
+          c(upper_2sd, rev(lower_2sd)), 
+          col = adjustcolor("lightblue", alpha.f = 0.3), border = NA)
+  
+  polygon(c(time_grid, rev(time_grid)), 
+          c(upper_1sd, rev(lower_1sd)), 
+          col = adjustcolor("lightblue", alpha.f = 0.5), border = NA)
+  
+  # Add mean line last so it's on top
+  lines(time_grid, mean_values, col = "red", lwd = 3)
+  
+  # Add SD line
+  lines(time_grid, stddev_values, col = "blue", lwd = 2, lty = 2)
+  
+  # Add grid for better readability
+  grid(lty = "dotted")
+  
+  # Add legend with configurable position
+  legend(legend_pos, 
+         legend = c("Mean", "Std. Deviation", "Mean ± 1SD", "Mean ± 2SD", "Sample Curves"),
+         col = c("red", "blue", adjustcolor("lightblue", alpha.f = 0.5), 
+                 adjustcolor("lightblue", alpha.f = 0.3), adjustcolor("gray", alpha.f = 0.5)),
+         lty = c(1, 2, 1, 1, 1),
+         lwd = c(3, 2, 10, 10, 1),
+         bg = "white")
+}
+
+# Function to plot covariance
+plot_covariance <- function(fd_obj, time_grid, title, legend_pos = "topright") {
+  # Calculate bivariate covariance function
+  cov_bifd <- var.fd(fd_obj)
+  
+  # Evaluate at time points
+  cov_mat <- eval.bifd(time_grid, time_grid, cov_bifd)
+  
+  # Improved contour plot with filled contours
+  # First create a basic contour plot
+  filled.contour(time_grid, time_grid, cov_mat,
+                 color.palette = function(n) hcl.colors(n, "Blues"),
+                 xlab = "Time (Hour)",
+                 ylab = "Time (Hour)",
+                 main = paste(title, "Covariance"),
+                 key.title = title("Legend"))
+  
+  # Reset to 1x1 layout
+  par(mfrow = c(1, 1))
+}
+
+# Function to calculate centrality measures
+plot_centrality_measures <- function(data_matrix, time_grid, title, legend_pos = "topright") {
+  # Calculate various centrality measures
+  mean_values <- colMeans(data_matrix)
+  median_values <- apply(data_matrix, 2, median)
+  trim_mean_values <- apply(data_matrix, 2, function(x) mean(x, trim = 0.15))
+  
+  # Set up y-limits to accommodate all lines
+  y_range <- range(c(mean_values, median_values, trim_mean_values))
+  y_padding <- 0.1 * (max(y_range) - min(y_range))
+  y_range <- c(min(y_range) - y_padding, max(y_range) + y_padding)
+  
+  # Create plot with improved styling
+  plot(time_grid, mean_values, type = "l", lwd = 3, col = "darkred",
+       main = paste(title, "- Centrality Measures"),
+       xlab = "Time (Hour)", ylab = "Value", 
+       ylim = y_range)
+  
+  # Add other centrality lines with distinctive styles
+  lines(time_grid, median_values, col = "darkblue", lwd = 3, lty = 2)
+  lines(time_grid, trim_mean_values, col = "darkgreen", lwd = 3, lty = 3)
+  
+  # Add grid for better readability
+  grid(lty = "dotted")
+  
+  # Add detailed legend
+  legend(legend_pos, 
+         legend = c("Mean", 
+                    "Median", 
+                    "Trimmed Mean (15%)"),
+         col = c("darkred", "darkblue", "darkgreen"),
+         lty = c(1, 2, 3),
+         lwd = c(3, 3, 3),
+         bg = "white")
+}
+
+# Function to calculate dispersion measures
+plot_dispersion_measures <- function(data_matrix, time_grid, title, legend_pos = "topright") {
+  # Calculate variance
+  var_values <- apply(data_matrix, 2, var)
+  
+  # Calculate trimmed variance (15%)
+  trim_var_values <- apply(data_matrix, 2, function(x) {
+    trimmed_data <- x[x >= quantile(x, 0.15) & x <= quantile(x, 0.85)]
+    var(trimmed_data)
+  })
+  
+  # Calculate MAD (for comparison)
+  mad_values <- apply(data_matrix, 2, function(x) {
+    mad(x)^2  # Square to make comparable to variance
+  })
+  
+  # Set up y-limits to accommodate all lines
+  y_range <- range(c(var_values, trim_var_values, mad_values))
+  y_padding <- 0.1 * (max(y_range) - min(y_range))
+  y_range <- c(min(y_range) - y_padding, max(y_range) + y_padding)
+  
+  # Create plot with improved styling
+  plot(time_grid, var_values, type = "l", lwd = 3, col = "darkred",
+       main = paste(title, "- Dispersion Measures"),
+       xlab = "Time (Hour)", ylab = "Value", 
+       ylim = y_range)
+  
+  # Add other dispersion lines with distinctive styles
+  lines(time_grid, trim_var_values, col = "darkblue", lwd = 3, lty = 2)
+  lines(time_grid, mad_values, col = "darkgreen", lwd = 3, lty = 3)
+  
+  # Add grid for better readability
+  grid(lty = "dotted")
+  
+  # Add detailed legend
+  legend(legend_pos, 
+         legend = c("Variance", 
+                    "Trimmed Variance (15%)", 
+                    "MAD²"),
+         col = c("darkred", "darkblue", "darkgreen"),
+         lty = c(1, 2, 3),
+         lwd = c(3, 3, 3),
+         bg = "white")
+}
+
+
+# Bull market descriptive statistics
+plot_mean_sd(bull_smooth$fdObj, time_grid, "Bull Market", "topleft")
+plot_covariance(bull_smooth$fdObj, time_grid, "Bull Market")
+plot_centrality_measures(as.matrix(bull_fda), time_grid, "Bull Market", "topleft")
+plot_dispersion_measures(as.matrix(bull_fda), time_grid, "Bull Market")
+
+# Bear market descriptive statistics
+plot_mean_sd(bear_smooth$fdObj, time_grid, "Bear Market", "topright")
+plot_covariance(bear_smooth$fdObj, time_grid, "Bear Market")
+plot_centrality_measures(as.matrix(bear_fda), time_grid, "Bear Market")
+plot_dispersion_measures(as.matrix(bear_fda), time_grid, "Bear Market")
+
+# Bull center market descriptive statistics
+plot_mean_sd(bull_center_smooth$fdObj, time_grid, "Bull Center Market", "topleft")
+plot_covariance(bull_center_smooth$fdObj, time_grid, "Bull Center Market")
+plot_centrality_measures(as.matrix(bull_center_fda), time_grid, "Bull Center Market")
+plot_dispersion_measures(as.matrix(bull_center_fda), time_grid, "Bull Center Market", "topleft")
+
+# Bear center market descriptive statistics
+plot_mean_sd(bear_center_smooth$fdObj, time_grid, "Bear Center Market", "topleft")
+plot_covariance(bear_center_smooth$fdObj, time_grid, "Bear Center Market")
+plot_centrality_measures(as.matrix(bear_center_fda), time_grid, "Bear Center Market")
+plot_dispersion_measures(as.matrix(bear_center_fda), time_grid, "Bear Center Market")
 
