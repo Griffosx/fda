@@ -1,7 +1,9 @@
 library(fda)
-library(ggplot2)
+library(fda.usc)
 library(dplyr)
+library(ggplot2)
 library(reshape2)
+library(fdaoutlier)
 
 
 #######################################################################################################################
@@ -480,4 +482,249 @@ plot_mean_sd(bear_center_smooth$fdObj, time_grid, "Bear Center Market", "topleft
 plot_covariance(bear_center_smooth$fdObj, time_grid, "Bear Center Market")
 plot_centrality_measures(as.matrix(bear_center_fda), time_grid, "Bear Center Market")
 plot_dispersion_measures(as.matrix(bear_center_fda), time_grid, "Bear Center Market")
+
+
+
+#######################################################################################################################
+# Depth Analysis, Boxplots, and Outlier Detection
+#######################################################################################################################
+
+
+
+# Function to perform depth analysis
+perform_depth_analysis <- function(fd_obj, time_grid, title) {
+  # Convert to fdata object for fda.usc functions
+  fdata_obj <- fdata(t(eval.fd(time_grid, fd_obj)), time_grid)
+  
+  # Fraiman-Muniz Depth
+  out.FM <- depth.FM(fdata_obj, trim = 0.1, draw = TRUE)
+  
+  return(list(FM = out.FM, mode = out.mode, RP = out.RP))
+}
+
+# Function to create pointwise boxplots for the original time points
+create_pointwise_boxplot <- function(data_matrix, time_grid, title) {
+  # Set up the plot area
+  par(mfrow = c(1, 1), mar = c(5, 4, 4, 2) + 0.1)
+  
+  # Create boxplot - one box for each time point
+  # data_matrix should have rows as observations and columns as time points
+  boxplot(data_matrix, 
+          names = time_grid, 
+          main = paste(title, "- Pointwise Boxplot"),
+          xlab = "Time (Hour)", 
+          ylab = "Stock Change",
+          col = "lightblue", 
+          outcol = "red", 
+          outpch = 19,
+          las = 2)  # Rotate x-axis labels for better readability
+  
+  # Add grid for better readability
+  grid(lty = "dotted", nx = NA, ny = NULL)
+  
+  # Add the mean curve
+  points(1:length(time_grid), colMeans(data_matrix), type = "l", 
+         lwd = 2, col = "darkblue")
+  
+  # Add the median curve
+  points(1:length(time_grid), apply(data_matrix, 2, median), type = "l", 
+         lwd = 2, col = "darkred", lty = 2)
+  
+  # Add legend
+  legend("topright", 
+         legend = c("Mean", "Median"),
+         col = c("darkblue", "darkred"),
+         lty = c(1, 2),
+         lwd = c(2, 2),
+         bg = "white")
+  
+  return(data_matrix)
+}
+
+# Function to detect outliers
+detect_outliers <- function(fd_obj, time_grid, title) {
+  # Evaluate functional data at time points
+  eval_data <- eval.fd(time_grid, fd_obj)
+  
+  # Functional boxplot outlier detection with BD (without plotting)
+  fbplot_bd <- fbplot(t(eval_data), method = "BD2", plot = FALSE)
+  
+  # Functional boxplot outlier detection with MBD (without plotting)
+  fbplot_mbd <- fbplot(t(eval_data), method = "MBD", plot = FALSE)
+  
+  # Multivariate outlier detection (MUOD)
+  muod_result <- muod(t(eval_data), cut_method = c("boxplot"))
+  
+  # Return outlier detection results
+  return(list(
+    fbplot_bd_outliers = fbplot_bd$outliers,
+    fbplot_mbd_outliers = fbplot_mbd$outliers,
+    muod_outliers = muod_result$outliers
+  ))
+}
+
+# Function to visualize MUOD outliers with their different types
+visualize_muod_outliers <- function(fd_obj, time_grid, muod_outliers, title) {
+  # Check if fd_obj is functional data object or matrix
+  if (inherits(fd_obj, "fd")) {
+    # Evaluate functional data at time points
+    eval_data <- eval.fd(time_grid, fd_obj)
+  } else {
+    # Assume it's already a matrix of evaluated data
+    eval_data <- fd_obj
+    # Make sure it has observations in columns
+    if (nrow(eval_data) != length(time_grid)) {
+      eval_data <- t(eval_data)
+    }
+  }
+  
+  # Set up a 2x2 panel for plots
+  par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+  
+  # Plot 1: All data with mean curve
+  matplot(time_grid, eval_data, type = "l", lty = 1, 
+          col = adjustcolor("gray", alpha.f = 0.2),
+          xlab = "Time (Hour)", 
+          ylab = "Stock Change", 
+          main = "All Curves")
+  
+  # Add mean curve
+  mean_values <- rowMeans(eval_data)
+  lines(time_grid, mean_values, col = "black", lwd = 2)
+  grid(lty = "dotted")
+  
+  # Plot 2: Shape outliers
+  matplot(time_grid, eval_data, type = "l", lty = 1, 
+          col = adjustcolor("gray", alpha.f = 0.2),
+          xlab = "Time (Hour)", 
+          ylab = "Stock Change", 
+          main = paste("Shape Outliers (", length(muod_outliers$shape), ")"))
+  
+  # Add mean curve
+  lines(time_grid, mean_values, col = "black", lwd = 2)
+  
+  # Add shape outliers if any
+  if (length(muod_outliers$shape) > 0) {
+    # Ensure indices are within bounds
+    valid_indices <- muod_outliers$shape[muod_outliers$shape <= ncol(eval_data)]
+    if (length(valid_indices) > 0) {
+      matlines(time_grid, eval_data[, valid_indices], type = "l", lty = 1, 
+               col = adjustcolor("blue", alpha.f = 0.8), lwd = 2)
+    }
+  }
+  grid(lty = "dotted")
+  
+  # Plot 3: Amplitude outliers
+  matplot(time_grid, eval_data, type = "l", lty = 1, 
+          col = adjustcolor("gray", alpha.f = 0.2),
+          xlab = "Time (Hour)", 
+          ylab = "Stock Change", 
+          main = paste("Amplitude Outliers (", length(muod_outliers$amplitude), ")"))
+  
+  # Add mean curve
+  lines(time_grid, mean_values, col = "black", lwd = 2)
+  
+  # Add amplitude outliers if any
+  if (length(muod_outliers$amplitude) > 0) {
+    # Ensure indices are within bounds
+    valid_indices <- muod_outliers$amplitude[muod_outliers$amplitude <= ncol(eval_data)]
+    if (length(valid_indices) > 0) {
+      matlines(time_grid, eval_data[, valid_indices], type = "l", lty = 1, 
+               col = adjustcolor("green", alpha.f = 0.8), lwd = 2)
+    }
+  }
+  grid(lty = "dotted")
+  
+  # Plot 4: Magnitude outliers
+  matplot(time_grid, eval_data, type = "l", lty = 1, 
+          col = adjustcolor("gray", alpha.f = 0.2),
+          xlab = "Time (Hour)", 
+          ylab = "Stock Change", 
+          main = paste("Magnitude Outliers (", length(muod_outliers$magnitude), ")"))
+  
+  # Add mean curve
+  lines(time_grid, mean_values, col = "black", lwd = 2)
+  
+  # Add magnitude outliers if any
+  if (length(muod_outliers$magnitude) > 0) {
+    # Ensure indices are within bounds
+    valid_indices <- muod_outliers$magnitude[muod_outliers$magnitude <= ncol(eval_data)]
+    if (length(valid_indices) > 0) {
+      matlines(time_grid, eval_data[, valid_indices], type = "l", lty = 1, 
+               col = adjustcolor("red", alpha.f = 0.8), lwd = 2)
+    }
+  }
+  grid(lty = "dotted")
+  
+  # Add overall title
+  mtext(paste(title, "- MUOD Outlier Analysis"), outer = TRUE, line = -1.5, cex = 1.2)
+  
+  # Reset to 1x1 layout
+  par(mfrow = c(1, 1))
+}
+
+# BULL
+bull_depth <- perform_depth_analysis(bull_smooth$fdObj, time_grid, "Bull Market")
+bull_boxplot_data <- create_pointwise_boxplot(bull_smooth$fdObj, time_grid, "Bull Market")
+bull_outliers <- detect_outliers(bull_smooth$fdObj, time_grid, "Bull Market")
+visualize_muod_outliers(bull_smooth$fdObj, time_grid, bull_outliers$muod_outliers, "Bull Market")
+
+# BEAR
+bear_depth <- perform_depth_analysis(bear_smooth$fdObj, time_grid, "Bear Market")
+bear_boxplot_data <- create_pointwise_boxplot(bear_smooth$fdObj, time_grid, "Bear Market")
+bear_outliers <- detect_outliers(bear_smooth$fdObj, time_grid, "Bear Market")
+visualize_muod_outliers(bear_smooth$fdObj, time_grid, bear_outliers$muod_outliers, "Bear Market")
+
+# BULL CENTER
+bull_center_depth <- perform_depth_analysis(bull_center_smooth$fdObj, time_grid, "Bull Center Market")
+bull_center_boxplot_data <- create_pointwise_boxplot(bull_center_smooth$fdObj, time_grid, "Bull Center Market")
+bull_center_outliers <- detect_outliers(bull_center_smooth$fdObj, time_grid, "Bull Center Market")
+visualize_muod_outliers(bull_center_smooth$fdObj, time_grid, bull_center_outliers$muod_outliers, "Bull Center Market")
+
+# BEAR CENTER
+bear_center_depth <- perform_depth_analysis(bear_center_smooth$fdObj, time_grid, "Bear Center Market")
+bear_center_boxplot_data <- create_pointwise_boxplot(bear_center_smooth$fdObj, time_grid, "Bear Center Market")
+bear_center_outliers <- detect_outliers(bear_center_smooth$fdObj, time_grid, "Bear Center Market")
+visualize_muod_outliers(bear_center_smooth$fdObj, time_grid, bear_center_outliers$muod_outliers, "Bear Center Market")
+
+
+
+# Compare outliers across different methods
+compare_outliers <- function(outlier_results, dataset_name) {
+  cat("\n", dataset_name, "Outlier Analysis:\n")
+  cat("BD Outliers:", length(outlier_results$fbplot_bd_outliers), 
+      "curves:", paste(outlier_results$fbplot_bd_outliers, collapse = ", "), "\n")
+  cat("MBD Outliers:", length(outlier_results$fbplot_mbd_outliers), 
+      "curves:", paste(outlier_results$fbplot_mbd_outliers, collapse = ", "), "\n")
+  cat("MUOD Outliers:", length(outlier_results$muod_outliers), 
+      "curves:", paste(outlier_results$muod_outliers, collapse = ", "), "\n")
+  
+  # Calculate overlap between methods
+  bd_mbd_overlap <- intersect(outlier_results$fbplot_bd_outliers, 
+                              outlier_results$fbplot_mbd_outliers)
+  bd_muod_overlap <- intersect(outlier_results$fbplot_bd_outliers, 
+                               outlier_results$muod_outliers)
+  mbd_muod_overlap <- intersect(outlier_results$fbplot_mbd_outliers, 
+                                outlier_results$muod_outliers)
+  all_methods_overlap <- Reduce(intersect, list(
+    outlier_results$fbplot_bd_outliers,
+    outlier_results$fbplot_mbd_outliers,
+    outlier_results$muod_outliers
+  ))
+  
+  cat("Outliers detected by both BD and MBD:", length(bd_mbd_overlap), 
+      "curves:", paste(bd_mbd_overlap, collapse = ", "), "\n")
+  cat("Outliers detected by both BD and MUOD:", length(bd_muod_overlap), 
+      "curves:", paste(bd_muod_overlap, collapse = ", "), "\n")
+  cat("Outliers detected by both MBD and MUOD:", length(mbd_muod_overlap), 
+      "curves:", paste(mbd_muod_overlap, collapse = ", "), "\n")
+  cat("Outliers detected by all three methods:", length(all_methods_overlap), 
+      "curves:", paste(all_methods_overlap, collapse = ", "), "\n")
+}
+
+# Compare outliers for each dataset
+compare_outliers(bull_outliers, "Bull Market")
+compare_outliers(bear_outliers, "Bear Market")
+compare_outliers(bull_center_outliers, "Bull Center Market")
+compare_outliers(bear_center_outliers, "Bear Center Market")
 
