@@ -21,9 +21,7 @@ TIME_POINTS = [
 
 def process_values(filepath, limit=None):
     # Read the CSV file
-    df = pd.read_csv(filepath)
-    if limit:
-        df = df.head(limit)
+    df = pd.read_csv(filepath, nrows=limit)
 
     # Create a list of close price columns
     close_columns = [f"close_{t}" for t in TIME_POINTS]
