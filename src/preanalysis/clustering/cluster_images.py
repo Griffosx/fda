@@ -7,6 +7,34 @@ from sklearn.preprocessing import StandardScaler
 from PIL import Image
 import glob
 
+"""
+This script provides a framework for applying K-means clustering to a collection
+of images, particularly those generated from data (e.g., bar charts representing
+time series). It extracts numerical features from each image, performs clustering
+to group similar images together, and then organizes the results visually and
+by file.
+
+Key functionalities include:
+-   **Image Loading and Feature Extraction:** Scans a specified directory for
+    PNG image files. For each image, it opens it, converts it to a NumPy array,
+    and extracts features (e.g., mean RGB values across the image's height,
+    flattened into a vector) suitable for clustering.
+-   **Feature Scaling:** Standardizes the extracted features using `StandardScaler`
+    to ensure that all features contribute equally to the distance calculations
+    during clustering.
+-   **K-means Clustering:** Applies the K-means algorithm to group the images
+    into a predefined number of clusters based on their extracted features.
+-   **Cluster Visualization:** Generates a visualization showing a sample of
+    images from each cluster, along with cluster ID and count, saved as both
+    PNG and PDF files. This helps in understanding the characteristics of each cluster.
+-   **Result Organization:**
+    -   Creates dedicated subdirectories for each cluster within an output folder.
+    -   Copies the original image files into their respective cluster directories.
+    -   Saves a CSV file (`cluster_assignments.csv`) mapping each image filename
+        to its assigned cluster, along with extracted ticker and day information.
+    -   Generates a summary CSV (`cluster_summary.csv`) providing counts and
+        sample tickers for each cluster.
+"""
 
 def cluster_images(
     input_dir="assets/bar_charts",
