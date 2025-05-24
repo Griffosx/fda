@@ -5,6 +5,29 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patches as patches
 
+"""
+This script provides utilities for processing financial time series data and
+generating visual representations (bar charts) from the normalized data.
+It's designed to take raw closing prices over specific time points, normalize
+them, and then create individual image files for each ticker and day.
+
+Key functionalities include:
+-   **Data Loading and Normalization:** Reads a CSV file containing financial
+    data. For each row (representing
+    a ticker on a specific day), it extracts close prices, normalizes them to
+    a 0-1 range based on their min-max values, and calculates the percentage
+    change from the minimum to the maximum price within the interval.
+-   **Visual Data Representation:** Generates highly customizable bar charts
+    where each bar corresponds to a time point and its color represents the
+    normalized price value (from red for low to green for high).
+-   **Dynamic Transparency (Alpha) Control:** Optionally applies transparency
+    (alpha) to the generated bar charts based on the calculated percentage
+    change from min to max. This allows for visual emphasis on data points
+    with higher price volatility.
+-   **Image Output:** Saves each generated visualization as a PNG image file,
+    named after the ticker and day, into a specified output directory.
+"""
+
 TIME_POINTS = [
     "0930",
     "0945",
