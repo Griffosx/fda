@@ -6,6 +6,30 @@ from PIL import Image
 import pandas as pd
 from generate_images import process_values
 
+"""
+This script provides a comprehensive solution for classifying data points represented
+by images, leveraging a pre-trained PyTorch deep learning model. It extends a typical
+classification pipeline by integrating image generation from tabular data, performing
+inference, and then organizing the original data points and their corresponding images
+into class-specific directories.
+
+The core functionality involves:
+-   **Dynamic Model Loading:** The script can load a pre-trained PyTorch model from the
+    specified path which was developed in classification_model.py, dynamically inferring the number of output classes from the saved model's
+    state dictionary.
+-   **Image Generation Integration:** It uses the `process_values` function (from `generate_images.py`) to convert input data (e.g., time series, financial data)
+    into bar charts.
+-   **Image Preprocessing:** Applies necessary transformations (resizing,ToTensor) to
+    images to prepare them for model inference, matching the training pipeline.
+-   **Classification with Confidence Thresholding:** Classifies each generated image
+    using the loaded model. It introduces a `probability_threshold` to categorize
+    predictions with low confidence into an "unknown" class, enhancing reliability.
+-   **Structured Output Management:** Organizes the classified data. For each class
+    (including 'unknown'), it creates a dedicated directory where the original
+    dataframe rows are saved as CSV files, and their corresponding images are copied.
+-   **Summary Reporting:** Provides a summary of high-confidence, low-confidence, and
+    total processed predictions at the end of the classification run.
+"""
 
 def classify_dataframe(
     df,
