@@ -1,3 +1,31 @@
+"""
+This script implements a complete workflow for training an image classification model using PyTorch.
+It leverages a pre-trained ResNet34 architecture from torchvision, adapts it for a custom dataset,
+and provides a structured training loop with validation and model saving capabilities.
+
+The script is designed for datasets organized in a standard ImageFolder format, where
+images are sorted into subdirectories corresponding to their respective classes.
+
+Key functionalities include:
+-   **Data Loading & Preprocessing:** Utilizes `ImageFolder` and `DataLoader` for efficient
+    data handling, with configurable image resizing and tensor conversion.
+-   **Dataset Splitting:** Automatically divides the dataset into training and validation sets.
+-   **Model Initialization:** Supports loading a pre-trained ResNet34 model (recommended for
+    transfer learning) and modifies its final layer to classify images into the
+    specific number of classes in your dataset.
+-   **Trainer Class:** Encapsulates the training and validation logic for better code
+    organization and reusability. It handles forward passes, backward propagation,
+    optimizer steps, and tracks loss and accuracy metrics per epoch.
+-   **Model Saving:** Saves the model's state dictionary when a new best validation
+    accuracy is achieved, allowing for easy resumption or deployment.
+-   **Device Agnostic:** Automatically detects and uses a CUDA-enabled GPU if available,
+    falling back to CPU otherwise.
+
+To use this script, ensure your dataset is structured with subfolders for each class
+(e.g., `data_dir/class1/img1.jpg`, `data_dir/class2/img2.jpg`), and update the `data_dir`
+argument in the `if __name__ == "__main__":` block to point to your dataset's root directory.
+"""
+
 import os
 import torch
 import torch.nn as nn
